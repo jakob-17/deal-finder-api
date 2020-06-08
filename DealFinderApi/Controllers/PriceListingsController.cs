@@ -9,6 +9,7 @@ using System.IO;
 using System.Text;
 using Newtonsoft.Json.Linq;
 using System.Text.RegularExpressions;
+using System.Web;
 
 namespace DealFinderApi.Controllers
 {
@@ -131,33 +132,7 @@ namespace DealFinderApi.Controllers
                 throw new System.Exception("Error: Could not connect to web page");
             }
 
-            string titlePattern = @"<title>(.*?)</title>";
-            string pricePattern = @"<(.*?)price(.*?)>(.*?).(\d{2})</(.*?)>";
-            string pricePatternAlt = "price\":\"(.*?).(\\d{2})\"";
-
-            var title = Regex.Match(htmlData, titlePattern);
-            var price = Regex.Matches(htmlData.ToLower(), pricePattern);
-
-            if (string.IsNullOrEmpty(title.Value))
-            {
-                throw new System.Exception("Title not found");
-            }
-            if (price.Count < 1)
-            {
-                price = Regex.Matches(htmlData.ToLower(), pricePatternAlt);
-                if (price.Count < 1) {
-                    throw new System.Exception("Price not found");
-                }            
-            }
-
-            PriceListing pl = new PriceListing();
-            pl.Url = priceListing.Url;
-            pl.ItemTitle = title.Value;
-            pl.ItemPrice = "";
-            foreach (var p in price)
-            {
-                pl.ItemPrice += p.ToString();
-            }
+            PriceListing pl = AssembleListingFromData(priceListing.Url, htmlData);
 
             _context.PriceListings.Add(pl);
             await _context.SaveChangesAsync();
@@ -184,6 +159,64 @@ namespace DealFinderApi.Controllers
         private bool PriceListingExists(long id)
         {
             return _context.PriceListings.Any(e => e.Id == id);
+        }
+
+        private PriceListing AssembleListingFromData(string url, string htmlData)
+        {
+            string titlePattern = @"<title>(.*?)</title>";
+            string pricePattern = @"<(.*?)price(.*?)>(.*?).(\d{2})</(.*?)>";
+            string pricePatternAlt = "price\":\"(.*?).(\\d{2})\"";
+
+            var title = Regex.Match(htmlData, titlePattern);
+            var pricesFound = Regex.Matches(htmlData.ToLower(), pricePattern);
+
+            if (string.IsNullOrEmpty(title.Value))
+            {
+                throw new System.Exception("Title not found");
+            }
+            if (pricesFound.Count < 1)
+            {
+                pricesFound = Regex.Matches(htmlData.ToLower(), pricePatternAlt);
+                if (pricesFound.Count < 1)
+                {
+                    throw new System.Exception("Price not found");
+                }
+            }
+
+            PriceListing pl = new PriceListing();
+            pl.Url = url;
+            pl.ItemTitle = title.Value;
+            pl.ItemPrice = "";
+
+            Dictionary<string, int> pricesDict = new Dictionary<string, int>();
+            foreach (var element in pricesFound)
+            {
+                string price = Regex.Match(element.ToString(), @"(\d+).(\d{2})").Value;
+                if (!string.IsNullOrEmpty(price))
+                {
+                    if (pricesDict.ContainsKey(price))
+                    {
+                        pricesDict[price]++;
+                    }
+                    else
+                    {
+                        pricesDict.Add(price, 1);
+                    }
+                }
+            }
+            string likelyPrice = string.Empty;
+            int likelyCount = 0;
+            foreach (KeyValuePair<string, int> entry in pricesDict)
+            {
+                if (entry.Value > likelyCount)
+                {
+                    likelyPrice = entry.Key;
+                    likelyCount = entry.Value;
+                }
+            }
+            pl.ItemPrice = likelyPrice;
+
+            return pl;
         }
 
 /*        private static PriceListing ListingToDTO(PriceListing priceListing) =>
