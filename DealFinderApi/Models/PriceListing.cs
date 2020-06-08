@@ -10,5 +10,6 @@ namespace DealFinderApi.Models
         public long Id { get; set; }
         public string Url { get; set; }
         public string ItemPrice { get; set; }
+        public string ItemTitle { get; set; }
     }
 }

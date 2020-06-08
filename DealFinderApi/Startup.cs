@@ -35,7 +35,7 @@ namespace DealFinderApi
             builder =>
             {
                 builder.AllowAnyMethod().AllowAnyHeader()
-                       .WithOrigins("https://localhost:3000")
+                       .WithOrigins("http://localhost:3000")
                        .AllowCredentials();
             }));
 
