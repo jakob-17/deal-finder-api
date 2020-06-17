@@ -161,65 +161,37 @@ namespace DealFinderApi.Controllers
             return _context.PriceListings.Any(e => e.Id == id);
         }
 
+        // working with only sweetwater.com for now
         private PriceListing AssembleListingFromData(string url, string htmlData)
         {
             string titlePattern = @"<title>(.*?)</title>";
-            string pricePattern = @"<(.*?)price(.*?)>(.*?).(\d{2})</(.*?)>";
-            string pricePatternAlt = "price\":\"(.*?).(\\d{2})\"";
+            string pricePattern = @"<meta itemprop=""price"" content=\""(\d+).(\d+)\"" />";
 
-            var title = Regex.Match(htmlData, titlePattern);
-            var pricesFound = Regex.Matches(htmlData.ToLower(), pricePattern);
+            var title = Regex.Match(htmlData, titlePattern).ToString();
+            var price = Regex.Match(htmlData, pricePattern).ToString();
 
-            if (string.IsNullOrEmpty(title.Value))
+            if (string.IsNullOrEmpty(title))
             {
                 throw new System.Exception("Title not found");
             }
-            if (pricesFound.Count < 1)
+            if (string.IsNullOrEmpty(price))
             {
-                pricesFound = Regex.Matches(htmlData.ToLower(), pricePatternAlt);
-                if (pricesFound.Count < 1)
-                {
-                    throw new System.Exception("Price not found");
-                }
+                throw new System.Exception("Price not found");
             }
+
+            title = title.Substring(title.IndexOf('>') + 1);
+            title = title.Substring(0, title.IndexOf('<'));
+            price = Regex.Match(price, @"(\d+).(\d+)").ToString();
 
             PriceListing pl = new PriceListing();
             pl.Url = url;
-            pl.ItemTitle = title.Value;
-            pl.ItemPrice = "";
-
-            Dictionary<string, int> pricesDict = new Dictionary<string, int>();
-            foreach (var element in pricesFound)
-            {
-                string price = Regex.Match(element.ToString(), @"(\d+).(\d{2})").Value;
-                if (!string.IsNullOrEmpty(price))
-                {
-                    if (pricesDict.ContainsKey(price))
-                    {
-                        pricesDict[price]++;
-                    }
-                    else
-                    {
-                        pricesDict.Add(price, 1);
-                    }
-                }
-            }
-            string likelyPrice = string.Empty;
-            int likelyCount = 0;
-            foreach (KeyValuePair<string, int> entry in pricesDict)
-            {
-                if (entry.Value > likelyCount)
-                {
-                    likelyPrice = entry.Key;
-                    likelyCount = entry.Value;
-                }
-            }
-            pl.ItemPrice = likelyPrice;
+            pl.ItemTitle = title;
+            pl.ItemPrice = price;
 
             return pl;
         }
 
-/*        private static PriceListing ListingToDTO(PriceListing priceListing) =>
+        /*private static PriceListing ListingToDTO(PriceListing priceListing) =>
             new PriceListing
             {
                 Id = priceListing.Id,
